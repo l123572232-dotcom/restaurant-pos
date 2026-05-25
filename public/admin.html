@@ -10,7 +10,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft Ya
 button { cursor: pointer; border: none; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
 
-.sidebar { width: 220px; background: #1a1a2e; color: #fff; display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar { width: 220px; background: #1a1a2e; color: #fff; display: flex; flex-direction: column; flex-shrink: 0; z-index: 100; transition: transform 0.25s; }
+
+.hamburger { display: none; position: fixed; top: 12px; left: 12px; z-index: 200; background: #FF6B35; color: #fff; border: none; width: 40px; height: 40px; border-radius: 10px; font-size: 22px; line-height: 40px; text-align: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+
+@media (max-width: 768px) {
+  .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .hamburger { display: block; }
+  .overlay.show { display: block; }
+  .main { padding: 60px 14px 20px; }
+  .btn { padding: 10px 18px; font-size: 14px; }
+  .form-row { flex-direction: column; }
+  .form-group input, .form-group select { min-width: 100%; }
+  .stats-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card .stat-value { font-size: 24px; }
+  .card { padding: 14px; }
+  table { font-size: 12px; }
+  table th, table td { padding: 8px 6px; }
+}
 .sidebar .brand { padding: 24px 20px; font-size: 20px; font-weight: 800; color: #FF6B35; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .sidebar .nav { flex: 1; padding: 12px 0; }
 .sidebar .nav-item { display: block; width: 100%; padding: 14px 24px; text-align: left; background: none; color: #aaa; font-size: 15px; font-weight: 500; transition: all 0.15s; border-left: 3px solid transparent; }
@@ -68,7 +87,9 @@ table tr:hover td { background: #fafafa; }
 </style>
 </head>
 <body>
-<div class="sidebar">
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar" id="sidebar">
   <div class="brand">⚙️ 後台管理</div>
   <div class="nav">
     <button class="nav-item active" data-tab="menu">📋 菜單管理</button>
@@ -91,6 +112,11 @@ let orders = [];
 let settings = {};
 
 // Navigation
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+
 document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
@@ -101,6 +127,8 @@ document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', 
   if (b.dataset.tab === 'orders') renderOrdersTab();
   if (b.dataset.tab === 'reports') renderReportsTab();
   if (b.dataset.tab === 'settings') renderSettingsTab();
+  // close sidebar on mobile after selecting
+  if (window.innerWidth <= 768) toggleSidebar();
 }));
 
 // === MENU TAB ===
