@@ -37,6 +37,42 @@ router.post('/auth/login', (req, res) => {
   res.json({ success: true, tenant: { id: tenant.id, store_name: tenant.store_name } });
 });
 
+router.post('/auth/register', (req, res) => {
+  const { username, password, store_name } = req.body;
+  if (!username || !password || !store_name) {
+    return res.status(400).json({ error: '請填寫所有欄位' });
+  }
+  if (username.length < 2 || username.length > 30) {
+    return res.status(400).json({ error: '帳號長度需為 2-30 字元' });
+  }
+  if (password.length < 4) {
+    return res.status(400).json({ error: '密碼長度至少 4 字元' });
+  }
+  if (store_name.trim().length < 1 || store_name.length > 50) {
+    return res.status(400).json({ error: '店名長度需為 1-50 字元' });
+  }
+  // reserve "admin" username
+  if (username.toLowerCase() === 'admin') {
+    return res.status(400).json({ error: '此帳號為保留字，請換一個' });
+  }
+
+  const db = getDb();
+  const existing = db.prepare("SELECT id FROM tenants WHERE username = ?").get(username);
+  if (existing) {
+    return res.status(409).json({ error: '此帳號已被使用' });
+  }
+
+  const hash = hashPassword(password);
+  const result = db.prepare(
+    "INSERT INTO tenants (username, password_hash, store_name, status) VALUES (?, ?, ?, 'active')"
+  ).run(username, hash, store_name.trim());
+
+  // auto-login after registration
+  req.session.tenantId = result.lastInsertRowid;
+  req.session.storeName = store_name.trim();
+  res.json({ success: true, tenant: { id: result.lastInsertRowid, store_name: store_name.trim() } });
+});
+
 router.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.json({ success: true });

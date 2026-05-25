@@ -25,6 +25,15 @@ input { font-family: inherit; }
 
 .error-msg { color: #e74c3c; font-size: 14px; text-align: center; margin-top: 12px; display: none; }
 .error-msg.show { display: block; }
+.success-msg { color: #27ae60; font-size: 14px; text-align: center; margin-top: 12px; display: none; }
+.success-msg.show { display: block; }
+
+.store-name-group { display: none; }
+.store-name-group.visible { display: block; }
+
+.toggle-link { text-align: center; margin-top: 20px; font-size: 14px; color: #888; }
+.toggle-link a { color: #FF6B35; cursor: pointer; text-decoration: none; font-weight: 600; }
+.toggle-link a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -39,42 +48,101 @@ input { font-family: inherit; }
     <label>密碼</label>
     <input type="password" id="password" placeholder="請輸入密碼" autocomplete="current-password">
   </div>
-  <button class="login-btn" id="loginBtn" onclick="login()">登入</button>
+  <div class="form-group store-name-group" id="storeNameGroup">
+    <label>店名</label>
+    <input type="text" id="storeName" placeholder="請輸入您的餐車/店名" autocomplete="organization">
+  </div>
+  <button class="login-btn" id="loginBtn" onclick="handleSubmit()">登入</button>
   <p class="error-msg" id="errorMsg">帳號或密碼錯誤</p>
+  <p class="success-msg" id="successMsg">註冊成功，即將跳轉...</p>
+  <p class="toggle-link" id="toggleText">還沒有帳號？<a id="toggleLink" onclick="toggleMode()">註冊新帳號</a></p>
 </div>
 
 <script>
-async function login() {
+let isRegisterMode = false;
+
+function toggleMode() {
+  isRegisterMode = !isRegisterMode;
+  const storeNameGroup = document.getElementById('storeNameGroup');
+  const loginBtn = document.getElementById('loginBtn');
+  const titleEl = document.querySelector('.sub');
+  const toggleText = document.getElementById('toggleText');
+  const toggleLink = document.getElementById('toggleLink');
+  document.getElementById('errorMsg').classList.remove('show');
+  document.getElementById('successMsg').classList.remove('show');
+
+  if (isRegisterMode) {
+    storeNameGroup.classList.add('visible');
+    loginBtn.textContent = '註冊';
+    titleEl.textContent = '建立您的餐車帳號';
+    toggleText.innerHTML = '已經有帳號？<a id="toggleLink" onclick="toggleMode()">返回登入</a>';
+  } else {
+    storeNameGroup.classList.remove('visible');
+    loginBtn.textContent = '登入';
+    titleEl.textContent = '請登入您的帳號';
+    toggleText.innerHTML = '還沒有帳號？<a id="toggleLink" onclick="toggleMode()">註冊新帳號</a>';
+  }
+}
+
+async function handleSubmit() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
+
   if (!username || !password) return;
 
   const btn = document.getElementById('loginBtn');
-  btn.disabled = true; btn.textContent = '登入中...';
+  btn.disabled = true;
+  btn.textContent = isRegisterMode ? '註冊中...' : '登入中...';
   document.getElementById('errorMsg').classList.remove('show');
+  document.getElementById('successMsg').classList.remove('show');
+
+  const endpoint = isRegisterMode ? '/api/auth/register' : '/api/auth/login';
+  const body = { username, password };
+
+  if (isRegisterMode) {
+    const storeName = document.getElementById('storeName').value.trim();
+    if (!storeName) {
+      document.getElementById('errorMsg').textContent = '請輸入店名';
+      document.getElementById('errorMsg').classList.add('show');
+      btn.disabled = false;
+      btn.textContent = '註冊';
+      return;
+    }
+    body.store_name = storeName;
+  }
 
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (res.ok) {
-      window.location.href = '/admin.html';
+      if (isRegisterMode) {
+        document.getElementById('successMsg').textContent = '註冊成功！即將跳轉...';
+        document.getElementById('successMsg').classList.add('show');
+        setTimeout(() => { window.location.href = '/admin.html'; }, 800);
+      } else {
+        window.location.href = '/admin.html';
+      }
     } else {
-      document.getElementById('errorMsg').textContent = data.error || '登入失敗';
+      document.getElementById('errorMsg').textContent = data.error || (isRegisterMode ? '註冊失敗' : '登入失敗');
       document.getElementById('errorMsg').classList.add('show');
     }
   } catch (e) {
     document.getElementById('errorMsg').textContent = '無法連線到伺服器';
     document.getElementById('errorMsg').classList.add('show');
   }
-  btn.disabled = false; btn.textContent = '登入';
+  btn.disabled = false;
+  btn.textContent = isRegisterMode ? '註冊' : '登入';
 }
 
 document.getElementById('password').addEventListener('keydown', e => {
-  if (e.key === 'Enter') login();
+  if (e.key === 'Enter') handleSubmit();
+});
+document.getElementById('storeName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleSubmit();
 });
 </script>
 </body>
