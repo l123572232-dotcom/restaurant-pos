@@ -1,24 +1,28 @@
 const router = require('express').Router();
 const { getDb } = require('../db/database');
+const { requireAuth } = require('./auth');
+
+router.use(requireAuth);
 
 // GET /api/reports/daily?date=YYYY-MM-DD
 router.get('/reports/daily', (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date query param required (YYYY-MM-DD)' });
 
   const orders = db.prepare(
-    "SELECT COUNT(*) AS total_orders, COALESCE(SUM(total_price), 0) AS total_revenue FROM orders WHERE date(created_at) = ? AND status != 'cancelled'"
-  ).get(date);
+    "SELECT COUNT(*) AS total_orders, COALESCE(SUM(total_price), 0) AS total_revenue FROM orders WHERE date(created_at) = ? AND status != 'cancelled' AND tenant_id = ?"
+  ).get(date, tid);
 
   const itemBreakdown = db.prepare(`
     SELECT oi.item_name, oi.item_id, COUNT(*) AS count, SUM(oi.subtotal) AS revenue
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-    WHERE date(o.created_at) = ? AND o.status != 'cancelled'
+    WHERE date(o.created_at) = ? AND o.status != 'cancelled' AND o.tenant_id = ?
     GROUP BY oi.item_id
     ORDER BY count DESC
-  `).all(date);
+  `).all(date, tid);
 
   res.json({
     date,
@@ -34,6 +38,7 @@ router.get('/reports/daily', (req, res) => {
 // GET /api/reports/monthly?year=YYYY&month=MM
 router.get('/reports/monthly', (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { year, month } = req.query;
   if (!year || !month) return res.status(400).json({ error: 'year and month query params required' });
 
@@ -43,26 +48,26 @@ router.get('/reports/monthly', (req, res) => {
   const dailyTotals = db.prepare(`
     SELECT date(created_at) AS date, COUNT(*) AS orders, SUM(total_price) AS revenue
     FROM orders
-    WHERE strftime('%Y-%m', created_at) = ? AND status != 'cancelled'
+    WHERE strftime('%Y-%m', created_at) = ? AND status != 'cancelled' AND tenant_id = ?
     GROUP BY date(created_at)
     ORDER BY date
-  `).all(period);
+  `).all(period, tid);
 
   const totals = db.prepare(`
     SELECT COALESCE(SUM(total_price), 0) AS total_revenue, COUNT(*) AS total_orders
     FROM orders
-    WHERE strftime('%Y-%m', created_at) = ? AND status != 'cancelled'
-  `).get(period);
+    WHERE strftime('%Y-%m', created_at) = ? AND status != 'cancelled' AND tenant_id = ?
+  `).get(period, tid);
 
   const topItems = db.prepare(`
     SELECT oi.item_name, oi.item_id, COUNT(*) AS count, SUM(oi.subtotal) AS revenue
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-    WHERE strftime('%Y-%m', o.created_at) = ? AND o.status != 'cancelled'
+    WHERE strftime('%Y-%m', o.created_at) = ? AND o.status != 'cancelled' AND o.tenant_id = ?
     GROUP BY oi.item_id
     ORDER BY count DESC
     LIMIT 10
-  `).all(period);
+  `).all(period, tid);
 
   res.json({
     year: Number(year),
@@ -77,6 +82,7 @@ router.get('/reports/monthly', (req, res) => {
 // GET /api/reports/export?type=daily&date=YYYY-MM-DD
 router.get('/reports/export', (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { type, date } = req.query;
 
   if (type !== 'daily' || !date) {
@@ -91,9 +97,9 @@ router.get('/reports/export', (req, res) => {
     FROM orders o
     JOIN order_items oi ON oi.order_id = o.id
     LEFT JOIN order_item_toppings oit ON oit.order_item_id = oi.id
-    WHERE date(o.created_at) = ?
+    WHERE date(o.created_at) = ? AND o.tenant_id = ?
     ORDER BY o.created_at DESC, oi.id
-  `).all(date);
+  `).all(date, tid);
 
   const headers = ['order_number', 'status', 'total_price', 'table_number', 'note',
     'item_name', 'size_name', 'quantity', 'subtotal', 'toppings', 'created_at'];

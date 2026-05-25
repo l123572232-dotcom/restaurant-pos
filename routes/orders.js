@@ -1,28 +1,30 @@
 const router = require('express').Router();
 const { getDb } = require('../db/database');
+const { requireAuth } = require('./auth');
 
-function getFullOrder(orderId) {
+function getFullOrder(orderId, tenantId) {
   const db = getDb();
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND tenant_id = ?').get(orderId, tenantId);
   if (!order) return null;
 
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ? AND tenant_id = ?').all(orderId, tenantId);
   for (const item of items) {
     item.toppings = db.prepare(
-      'SELECT topping_name AS name, price_adjust FROM order_item_toppings WHERE order_item_id = ?'
-    ).all(item.id);
+      'SELECT topping_name AS name, price_adjust FROM order_item_toppings WHERE order_item_id = ? AND tenant_id = ?'
+    ).all(item.id, tenantId);
   }
   order.items = items;
   return order;
 }
 
 // GET /api/orders — list orders with optional ?status= and ?date=YYYY-MM-DD
-router.get('/orders', (req, res) => {
+router.get('/orders', requireAuth, (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { status, date } = req.query;
 
-  const conditions = [];
-  const params = [];
+  const conditions = ['tenant_id = ?'];
+  const params = [tid];
 
   if (status) {
     conditions.push('status = ?');
@@ -40,11 +42,11 @@ router.get('/orders', (req, res) => {
   const orders = db.prepare(sql).all(...params);
 
   for (const order of orders) {
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ? AND tenant_id = ?').all(order.id, tid);
     for (const item of items) {
       item.toppings = db.prepare(
-        'SELECT topping_name AS name, price_adjust FROM order_item_toppings WHERE order_item_id = ?'
-      ).all(item.id);
+        'SELECT topping_name AS name, price_adjust FROM order_item_toppings WHERE order_item_id = ? AND tenant_id = ?'
+      ).all(item.id, tid);
     }
     order.items = items;
   }
@@ -53,8 +55,9 @@ router.get('/orders', (req, res) => {
 });
 
 // POST /api/orders — create order
-router.post('/orders', (req, res) => {
+router.post('/orders', requireAuth, (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { items, table_number = '', note = '' } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -69,13 +72,13 @@ router.post('/orders', (req, res) => {
   const dateStr = `${y}${m}${d}`;
   const today = `${y}-${m}-${d}`;
 
-  const lastReset = db.prepare("SELECT value FROM settings WHERE key = 'last_reset_date'").get();
+  const lastReset = db.prepare("SELECT value FROM settings WHERE key = 'last_reset_date' AND tenant_id = ?").get(tid);
   if (lastReset.value !== today) {
-    db.prepare("UPDATE settings SET value = '0' WHERE key = 'current_order_number'").run();
-    db.prepare("UPDATE settings SET value = ? WHERE key = 'last_reset_date'").run(today);
+    db.prepare("UPDATE settings SET value = '0' WHERE key = 'current_order_number' AND tenant_id = ?").run(tid);
+    db.prepare("UPDATE settings SET value = ? WHERE key = 'last_reset_date' AND tenant_id = ?").run(today, tid);
   }
 
-  const counter = db.prepare("SELECT value FROM settings WHERE key = 'current_order_number'").get();
+  const counter = db.prepare("SELECT value FROM settings WHERE key = 'current_order_number' AND tenant_id = ?").get(tid);
   const nextNum = parseInt(counter.value, 10) + 1;
   const orderNumber = `${dateStr}-${String(nextNum).padStart(3, '0')}`;
 
@@ -88,13 +91,13 @@ router.post('/orders', (req, res) => {
   }
 
   const orderResult = db.prepare(
-    'INSERT INTO orders (order_number, status, total_price, table_number, note) VALUES (?, ?, ?, ?, ?)'
-  ).run(orderNumber, 'pending', totalPrice, table_number, note);
+    'INSERT INTO orders (tenant_id, order_number, status, total_price, table_number, note) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(tid, orderNumber, 'pending', totalPrice, table_number, note);
 
   const orderId = Number(orderResult.lastInsertRowid);
 
   // Look up item names from items table for denormalization
-  const itemRows = db.prepare('SELECT id, name FROM items').all();
+  const itemRows = db.prepare('SELECT id, name FROM items WHERE tenant_id = ?').all(tid);
   const itemNames = {};
   for (const row of itemRows) itemNames[row.id] = row.name;
 
@@ -106,35 +109,36 @@ router.post('/orders', (req, res) => {
     const itemName = itemNames[item.item_id] || item.item_name || '';
 
     const itemResult = db.prepare(
-      `INSERT INTO order_items (order_id, item_id, item_name, size_name, base_price, size_adjust, quantity, subtotal)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, item.item_id, itemName, item.size_name || '', item.base_price, item.size_adjust || 0, qty, subtotal);
+      `INSERT INTO order_items (tenant_id, order_id, item_id, item_name, size_name, base_price, size_adjust, quantity, subtotal)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(tid, orderId, item.item_id, itemName, item.size_name || '', item.base_price, item.size_adjust || 0, qty, subtotal);
 
     const orderItemId = Number(itemResult.lastInsertRowid);
 
     for (const topping of (item.toppings || [])) {
       db.prepare(
-        'INSERT INTO order_item_toppings (order_item_id, topping_name, price_adjust) VALUES (?, ?, ?)'
-      ).run(orderItemId, topping.name, topping.price_adjust || 0);
+        'INSERT INTO order_item_toppings (tenant_id, order_item_id, topping_name, price_adjust) VALUES (?, ?, ?, ?)'
+      ).run(tid, orderItemId, topping.name, topping.price_adjust || 0);
     }
   }
 
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'current_order_number'").run(String(nextNum));
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'current_order_number' AND tenant_id = ?").run(String(nextNum), tid);
 
-  const order = getFullOrder(orderId);
+  const order = getFullOrder(orderId, tid);
   res.status(201).json(order);
 });
 
 // GET /api/orders/:id — single order detail
-router.get('/orders/:id', (req, res) => {
-  const order = getFullOrder(req.params.id);
+router.get('/orders/:id', requireAuth, (req, res) => {
+  const order = getFullOrder(req.params.id, req.session.tenantId);
   if (!order) return res.status(404).json({ error: 'order not found' });
   res.json(order);
 });
 
 // PUT /api/orders/:id/status — update order status
-router.put('/orders/:id/status', (req, res) => {
+router.put('/orders/:id/status', requireAuth, (req, res) => {
   const db = getDb();
+  const tid = req.session.tenantId;
   const { status } = req.body;
   const valid = ['pending', 'preparing', 'done', 'cancelled'];
 
@@ -143,27 +147,28 @@ router.put('/orders/:id/status', (req, res) => {
   }
 
   const r = db.prepare(
-    "UPDATE orders SET status = ?, updated_at = datetime('now', 'localtime') WHERE id = ?"
-  ).run(status, req.params.id);
+    "UPDATE orders SET status = ?, updated_at = datetime('now', 'localtime') WHERE id = ? AND tenant_id = ?"
+  ).run(status, req.params.id, tid);
 
   if (r.changes === 0) return res.status(404).json({ error: 'order not found' });
 
-  const completedAt = status === 'done' || status === 'cancelled'
-    ? db.prepare("UPDATE orders SET completed_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id)
-    : null;
+  if (status === 'done' || status === 'cancelled') {
+    db.prepare("UPDATE orders SET completed_at = datetime('now', 'localtime') WHERE id = ? AND tenant_id = ?").run(req.params.id, tid);
+  }
 
-  res.json(getFullOrder(req.params.id));
+  res.json(getFullOrder(req.params.id, tid));
 });
 
 // PUT /api/orders/:id/call — increment calling number for kitchen display
-router.put('/orders/:id/call', (req, res) => {
+router.put('/orders/:id/call', requireAuth, (req, res) => {
   const db = getDb();
-  const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.id);
+  const tid = req.session.tenantId;
+  const order = db.prepare('SELECT id FROM orders WHERE id = ? AND tenant_id = ?').get(req.params.id, tid);
   if (!order) return res.status(404).json({ error: 'order not found' });
 
-  const callingNum = db.prepare("SELECT value FROM settings WHERE key = 'current_calling_number'").get();
+  const callingNum = db.prepare("SELECT value FROM settings WHERE key = 'current_calling_number' AND tenant_id = ?").get(tid);
   const nextNum = parseInt(callingNum.value, 10) + 1;
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'current_calling_number'").run(String(nextNum));
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'current_calling_number' AND tenant_id = ?").run(String(nextNum), tid);
 
   res.json({ order_id: Number(req.params.id), calling_number: nextNum });
 });

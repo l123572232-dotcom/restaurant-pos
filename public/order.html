@@ -112,7 +112,16 @@ let menu = { categories: [], itemsByCat: {} };
 let cart = [];
 let activeCat = null;
 
+async function checkAuth() {
+  try {
+    const res = await fetch(API + '/auth/me');
+    if (!res.ok) { window.location.href = '/login.html'; return false; }
+    return true;
+  } catch (e) { window.location.href = '/login.html'; return false; }
+}
+
 async function init() {
+  if (!await checkAuth()) return;
   const [menuRes, settingsRes] = await Promise.all([fetch(API + '/menu'), fetch(API + '/settings')]);
   menu.categories = await menuRes.json();
   const settings = await settingsRes.json();

@@ -90,12 +90,16 @@ table tr:hover td { background: #fafafa; }
 <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
 <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 <div class="sidebar" id="sidebar">
-  <div class="brand">⚙️ 後台管理</div>
+  <div class="brand" id="sidebarBrand">⚙️ 後台管理</div>
   <div class="nav">
     <button class="nav-item active" data-tab="menu">📋 菜單管理</button>
     <button class="nav-item" data-tab="orders">📦 訂單管理</button>
     <button class="nav-item" data-tab="reports">📊 報表</button>
     <button class="nav-item" data-tab="settings">⚙️ 設定</button>
+    <button class="nav-item" data-tab="tenants" id="navTenants" style="display:none;">🏪 餐車管理</button>
+  </div>
+  <div style="padding:12px 24px;border-top:1px solid rgba(255,255,255,0.1);">
+    <button onclick="logout()" style="background:none;color:#aaa;font-size:13px;cursor:pointer;">🚪 登出</button>
   </div>
 </div>
 <div class="main" id="main">
@@ -103,6 +107,7 @@ table tr:hover td { background: #fafafa; }
   <div class="tab-content" id="tab-orders"></div>
   <div class="tab-content" id="tab-reports"></div>
   <div class="tab-content" id="tab-settings"></div>
+  <div class="tab-content" id="tab-tenants"></div>
 </div>
 
 <script>
@@ -110,6 +115,28 @@ const API = '/api';
 let menu = { categories: [], itemsByCat: {} };
 let orders = [];
 let settings = {};
+let currentTenant = null;
+
+async function checkAuth() {
+  try {
+    const res = await fetch(API + '/auth/me');
+    if (!res.ok) { window.location.href = '/login.html'; return null; }
+    currentTenant = await res.json();
+    document.getElementById('sidebarBrand').textContent = '⚙️ ' + currentTenant.store_name;
+    if (currentTenant.id === 1) {
+      document.getElementById('navTenants').style.display = '';
+    }
+    return currentTenant;
+  } catch (e) {
+    window.location.href = '/login.html';
+    return null;
+  }
+}
+
+async function logout() {
+  await fetch(API + '/auth/logout', { method: 'POST' });
+  window.location.href = '/login.html';
+}
 
 // Navigation
 function toggleSidebar() {
@@ -127,6 +154,7 @@ document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', 
   if (b.dataset.tab === 'orders') renderOrdersTab();
   if (b.dataset.tab === 'reports') renderReportsTab();
   if (b.dataset.tab === 'settings') renderSettingsTab();
+  if (b.dataset.tab === 'tenants') renderTenantsTab();
   // close sidebar on mobile after selecting
   if (window.innerWidth <= 768) toggleSidebar();
 }));
@@ -431,8 +459,80 @@ function showToast(msg, isError) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
 }
 
+// === TENANTS TAB (super admin only) ===
+async function renderTenantsTab() {
+  const el = document.getElementById('tab-tenants');
+  el.innerHTML = '<p style="color:#888;">載入中...</p>';
+
+  const res = await fetch(API + '/tenants');
+  const tenants = await res.json();
+
+  let html = '<h2>🏪 餐車管理</h2>';
+
+  html += `<div class="card"><h3>新增餐車</h3>
+    <div class="form-row">
+      <div class="form-group"><label>帳號</label><input id="newTenantUser" placeholder="帳號"></div>
+      <div class="form-group"><label>密碼</label><input id="newTenantPass" type="password" placeholder="密碼"></div>
+      <div class="form-group"><label>店名</label><input id="newTenantName" placeholder="例如：美味便當店"></div>
+      <button class="btn btn-primary" onclick="addTenant()" style="align-self:flex-end;">新增餐車</button>
+    </div></div>`;
+
+  html += '<div class="card"><div class="table-wrap"><table><thead><tr><th>ID</th><th>帳號</th><th>店名</th><th>狀態</th><th>建立時間</th><th>操作</th></tr></thead><tbody>';
+  for (const t of tenants) {
+    html += `<tr>
+      <td>${t.id}</td>
+      <td>${t.username}</td>
+      <td>${t.store_name}</td>
+      <td><span class="badge ${t.status === 'active' ? 'badge-done' : 'badge-cancelled'}">${t.status === 'active' ? '啟用' : '停用'}</span></td>
+      <td>${t.created_at || '—'}</td>
+      <td>
+        <button class="btn btn-sm ${t.status === 'active' ? 'btn-danger' : 'btn-primary'}" onclick="updateTenantStatus(${t.id}, '${t.status === 'active' ? 'disabled' : 'active'}')">${t.status === 'active' ? '停用' : '啟用'}</button>
+        ${t.id !== 1 ? `<button class="btn btn-danger btn-sm" onclick="deleteTenant(${t.id})">刪除</button>` : ''}
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+async function addTenant() {
+  const username = document.getElementById('newTenantUser').value.trim();
+  const password = document.getElementById('newTenantPass').value.trim();
+  const store_name = document.getElementById('newTenantName').value.trim();
+  if (!username || !password || !store_name) return showToast('請填寫完整資訊', true);
+  const res = await fetch(API + '/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, store_name })
+  });
+  if (!res.ok) { const d = await res.json(); return showToast(d.error || '新增失敗', true); }
+  showToast('餐車已新增');
+  renderTenantsTab();
+}
+
+async function updateTenantStatus(id, status) {
+  await fetch(API + '/tenants/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  showToast('狀態已更新');
+  renderTenantsTab();
+}
+
+async function deleteTenant(id) {
+  if (!confirm('確定刪除此餐車？')) return;
+  await fetch(API + '/tenants/' + id, { method: 'DELETE' });
+  showToast('餐車已刪除');
+  renderTenantsTab();
+}
+
 // Init
-renderMenuTab();
+(async () => {
+  const tenant = await checkAuth();
+  if (!tenant) return;
+  renderMenuTab();
+})();
 </script>
 </body>
 </html>
