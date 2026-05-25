@@ -83,6 +83,9 @@ table tr:hover td { background: #fafafa; }
 .toast.error { background: #e74c3c; box-shadow: 0 8px 24px rgba(231,76,60,0.3); }
 @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+.impersonate-banner { background: #fff3cd; color: #856404; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-radius: 10px; margin-bottom: 16px; font-size: 14px; font-weight: 600; }
+.impersonate-banner button { background: #856404; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+
 .sizes-list, .toppings-list { font-size: 12px; color: #888; margin-top: 2px; }
 </style>
 </head>
@@ -103,6 +106,10 @@ table tr:hover td { background: #fafafa; }
   </div>
 </div>
 <div class="main" id="main">
+  <div class="impersonate-banner" id="impersonateBanner" style="display:none;">
+    <span>🔓 你目前以管理員身份檢視餐車後台</span>
+    <button onclick="restoreAdmin()">↩ 返回管理員</button>
+  </div>
   <div class="tab-content active" id="tab-menu"></div>
   <div class="tab-content" id="tab-orders"></div>
   <div class="tab-content" id="tab-reports"></div>
@@ -125,6 +132,10 @@ async function checkAuth() {
     document.getElementById('sidebarBrand').textContent = '⚙️ ' + currentTenant.store_name;
     if (currentTenant.id === 1) {
       document.getElementById('navTenants').style.display = '';
+    }
+    // Show impersonation banner
+    if (currentTenant.impersonating) {
+      document.getElementById('impersonateBanner').style.display = '';
     }
     return currentTenant;
   } catch (e) {
@@ -434,6 +445,18 @@ async function renderSettingsTab() {
       <div class="form-group"><label>印表機 IP</label><input id="setPrinterIp" value="${settings.printer_ip || ''}" placeholder="192.168.x.x"></div>
     </div>
     <button class="btn btn-primary" onclick="savePrinterSettings()">儲存印表機設定</button>
+  </div>
+  <div class="card">
+    <h3>📱 客人點餐頁面</h3>
+    <p style="color:#888;font-size:13px;margin-bottom:12px;">顧客使用此連結自助點餐，可製作 QR Code 或直接分享</p>
+    <div style="padding:10px 14px;background:#f8f9fa;border-radius:8px;font-family:monospace;font-size:14px;color:#FF6B35;word-break:break-all;margin-bottom:12px;">${window.location.origin}/order.html?t=${currentTenant.username}</div>
+    <button class="btn btn-primary" onclick="window.open('/order.html?t=${currentTenant.username}', '_blank')">🔗 開啟點餐頁面</button>
+  </div>
+  <div class="card">
+    <h3>🖥️ 櫃檯點餐頁面</h3>
+    <p style="color:#888;font-size:13px;margin-bottom:12px;">店員使用的櫃檯點餐介面，需先登入餐車帳號</p>
+    <div style="padding:10px 14px;background:#f8f9fa;border-radius:8px;font-family:monospace;font-size:14px;color:#FF6B35;word-break:break-all;margin-bottom:12px;">${window.location.origin}/index.html</div>
+    <button class="btn btn-primary" onclick="window.open('/index.html', '_blank')">🔗 開啟櫃檯點餐</button>
   </div>`;
 }
 
@@ -486,6 +509,7 @@ async function renderTenantsTab() {
       <td><span class="badge ${t.status === 'active' ? 'badge-done' : 'badge-cancelled'}">${t.status === 'active' ? '啟用' : '停用'}</span></td>
       <td>${t.created_at || '—'}</td>
       <td>
+        ${t.id !== 1 ? `<button class="btn btn-primary btn-sm" onclick="impersonateTenant(${t.id})">👤 進入後台</button>` : ''}
         <button class="btn btn-sm ${t.status === 'active' ? 'btn-danger' : 'btn-primary'}" onclick="updateTenantStatus(${t.id}, '${t.status === 'active' ? 'disabled' : 'active'}')">${t.status === 'active' ? '停用' : '啟用'}</button>
         ${t.id !== 1 ? `<button class="btn btn-danger btn-sm" onclick="deleteTenant(${t.id})">刪除</button>` : ''}
       </td>
@@ -525,6 +549,23 @@ async function deleteTenant(id) {
   await fetch(API + '/tenants/' + id, { method: 'DELETE' });
   showToast('餐車已刪除');
   renderTenantsTab();
+}
+
+async function impersonateTenant(id) {
+  if (!confirm('確定要以管理員身份進入此餐車後台？')) return;
+  const res = await fetch(API + '/auth/impersonate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenantId: id })
+  });
+  if (!res.ok) { const d = await res.json(); return showToast(d.error || '切換失敗', true); }
+  showToast('已切換至餐車後台');
+  setTimeout(() => window.location.reload(), 500);
+}
+
+async function restoreAdmin() {
+  await fetch(API + '/auth/restore', { method: 'POST' });
+  window.location.reload();
 }
 
 // Init

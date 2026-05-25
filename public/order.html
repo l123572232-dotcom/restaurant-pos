@@ -107,22 +107,21 @@ button { cursor: pointer; border: none; font-family: inherit; -webkit-tap-highli
 </div>
 
 <script>
-const API = '/api';
+const params = new URLSearchParams(window.location.search);
+const STORE = params.get('t');
+if (!STORE) {
+  document.body.innerHTML = '<div style="text-align:center;padding:80px 20px;font-family:sans-serif;"><h2>缺少餐車識別碼</h2><p>請使用正確的點餐連結（含 ?t= 參數）</p></div>';
+  throw new Error('Missing store parameter');
+}
+const T = '?t=' + encodeURIComponent(STORE);
+function api(path) { return '/api/public' + path + T; }
+
 let menu = { categories: [], itemsByCat: {} };
 let cart = [];
 let activeCat = null;
 
-async function checkAuth() {
-  try {
-    const res = await fetch(API + '/auth/me');
-    if (!res.ok) { window.location.href = '/login.html'; return false; }
-    return true;
-  } catch (e) { window.location.href = '/login.html'; return false; }
-}
-
 async function init() {
-  if (!await checkAuth()) return;
-  const [menuRes, settingsRes] = await Promise.all([fetch(API + '/menu'), fetch(API + '/settings')]);
+  const [menuRes, settingsRes] = await Promise.all([fetch(api('/menu')), fetch(api('/settings'))]);
   menu.categories = await menuRes.json();
   const settings = await settingsRes.json();
   document.getElementById('storeName').textContent = settings.store_name || '快餐店';
@@ -287,7 +286,7 @@ function bindEvents() {
     const btn = document.activeElement;
     btn.disabled = true; btn.textContent = '送出中...';
     try {
-      const res = await fetch(API + '/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(api('/orders'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: cart.map(c => ({ item_id: c.item_id, item_name: c.item_name, base_price: c.base_price, size_name: c.size_name, size_adjust: c.size_adjust, quantity: c.quantity, toppings: c.toppings })) })
       });
       if (!res.ok) throw new Error('Failed');
@@ -306,7 +305,7 @@ function bindEvents() {
     const btn = document.getElementById('detailSubmit');
     btn.disabled = true; btn.textContent = '送出中...';
     try {
-      const res = await fetch(API + '/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(api('/orders'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: cart.map(c => ({ item_id: c.item_id, item_name: c.item_name, base_price: c.base_price, size_name: c.size_name, size_adjust: c.size_adjust, quantity: c.quantity, toppings: c.toppings })) })
       });
       if (!res.ok) throw new Error('Failed');

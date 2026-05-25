@@ -16,6 +16,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 getDb();
 
+app.use('/api/public', require('./routes/public'));
 app.use('/api', require('./routes/auth').router);
 app.use('/api', require('./routes/tenants'));
 app.use('/api', require('./routes/menu'));

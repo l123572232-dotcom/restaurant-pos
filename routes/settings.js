@@ -41,9 +41,12 @@ router.get('/settings/qrcode', async (req, res) => {
   try {
     const QRCode = require('qrcode');
     const db = getDb();
-    const storeUrl = db.prepare("SELECT value FROM settings WHERE key = 'store_url' AND tenant_id = ?").get(req.session.tenantId);
+    const tid = req.session.tenantId;
+    const storeUrl = db.prepare("SELECT value FROM settings WHERE key = 'store_url' AND tenant_id = ?").get(tid);
     const base = storeUrl ? storeUrl.value : 'http://192.168.31.12:3000';
-    const url = base + '/order.html';
+    // Append tenant username for public ordering
+    const tenant = db.prepare("SELECT username FROM tenants WHERE id = ?").get(tid);
+    const url = base + '/order.html?t=' + (tenant ? tenant.username : '');
     const dataUrl = await QRCode.toDataURL(url);
     res.json({ url, qrcode: dataUrl });
   } catch (err) {

@@ -57,7 +57,49 @@ router.get('/auth/me', (req, res) => {
     return res.status(401).json({ error: 'not authenticated' });
   }
 
-  res.json({ id: tenant.id, username: tenant.username, store_name: tenant.store_name, status: tenant.status });
+  res.json({ id: tenant.id, username: tenant.username, store_name: tenant.store_name, status: tenant.status, impersonating: !!req.session.originalTenantId });
+});
+
+// POST /api/auth/impersonate — admin (id=1) switches to another tenant
+router.post('/auth/impersonate', (req, res) => {
+  if (!req.session || req.session.tenantId !== 1) {
+    return res.status(403).json({ error: 'only admin can impersonate' });
+  }
+  const { tenantId } = req.body;
+  if (!tenantId) {
+    return res.status(400).json({ error: 'tenantId is required' });
+  }
+
+  const db = getDb();
+  const tenant = db.prepare("SELECT id, username, store_name, status FROM tenants WHERE id = ?").get(tenantId);
+  if (!tenant) {
+    return res.status(404).json({ error: 'tenant not found' });
+  }
+  if (tenant.status !== 'active') {
+    return res.status(403).json({ error: 'tenant is disabled' });
+  }
+
+  req.session.originalTenantId = 1;
+  req.session.tenantId = tenant.id;
+  req.session.storeName = tenant.store_name;
+  res.json({ success: true, tenant: { id: tenant.id, username: tenant.username, store_name: tenant.store_name } });
+});
+
+// POST /api/auth/restore — return to admin after impersonation
+router.post('/auth/restore', (req, res) => {
+  if (!req.session || !req.session.originalTenantId) {
+    return res.status(400).json({ error: 'no impersonation to restore' });
+  }
+  const db = getDb();
+  const admin = db.prepare("SELECT id, username, store_name FROM tenants WHERE id = ?").get(req.session.originalTenantId);
+  if (!admin) {
+    return res.status(404).json({ error: 'admin not found' });
+  }
+
+  req.session.tenantId = admin.id;
+  req.session.storeName = admin.store_name;
+  delete req.session.originalTenantId;
+  res.json({ success: true, tenant: { id: admin.id, username: admin.username, store_name: admin.store_name } });
 });
 
 module.exports = { router, requireAuth };
