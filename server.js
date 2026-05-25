@@ -38,6 +38,20 @@ if (tenantCount === 0) {
   db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'printer_name', '')").run();
 }
 
+// Migration: generate printer_api_key for tenants that don't have one
+const crypto = require('crypto');
+const tenantsWithoutKey = db.prepare(`
+  SELECT t.id FROM tenants t
+  WHERE NOT EXISTS (
+    SELECT 1 FROM settings s WHERE s.tenant_id = t.id AND s.key = 'printer_api_key'
+  )
+`).all();
+for (const t of tenantsWithoutKey) {
+  const key = crypto.randomBytes(16).toString('hex');
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_api_key', ?)").run(t.id, key);
+  console.log(`Generated printer API key for tenant ${t.id}`);
+}
+
 app.use('/api/public', require('./routes/public'));
 app.use('/api/printer', require('./routes/printer'));
 app.use('/api', require('./routes/auth').router);
