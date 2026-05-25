@@ -25,7 +25,15 @@ router.post('/tenants', requireAuth, (req, res) => {
     'INSERT INTO tenants (username, password_hash, store_name) VALUES (?, ?, ?)'
   ).run(username, hash, store_name);
 
-  const tenant = db.prepare('SELECT id, username, store_name, status, created_at FROM tenants WHERE id = ?').get(r.lastInsertRowid);
+  const newTenantId = Number(r.lastInsertRowid);
+
+  // Generate printer API key for new tenant
+  const printerKey = crypto.randomBytes(16).toString('hex');
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_api_key', ?)").run(newTenantId, printerKey);
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_enabled', 'false')").run(newTenantId);
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_name', '')").run(newTenantId);
+
+  const tenant = db.prepare('SELECT id, username, store_name, status, created_at FROM tenants WHERE id = ?').get(newTenantId);
   res.status(201).json(tenant);
 });
 

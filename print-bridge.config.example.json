@@ -1,0 +1,7 @@
+{
+  "server": "https://restaurant-pos-qnnp.onrender.com",
+  "tenant": "你的餐車帳號",
+  "key": "從管理後台設定頁複製的 API Key",
+  "printer": "你的印表機名稱（例如: XP-58IIH）",
+  "interval": 5000
+}

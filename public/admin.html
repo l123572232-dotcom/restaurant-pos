@@ -438,13 +438,35 @@ async function renderSettingsTab() {
   </div>
 
   <div class="card">
-    <h3>印表機設定</h3>
-    <p style="color:#888;font-size:13px;">印表機功能需配合 node-thermal-printer。設定儲存於本機配置中。</p>
-    <div class="form-row" style="margin-top:12px;">
-      <div class="form-group"><label>印表機介面</label><input id="setPrinterInterface" value="${settings.printer_interface || 'tcp'}" placeholder="tcp / usb"></div>
-      <div class="form-group"><label>印表機 IP</label><input id="setPrinterIp" value="${settings.printer_ip || ''}" placeholder="192.168.x.x"></div>
+    <h3>🖨️ 印表機設定（本地橋接器模式）</h3>
+    <p style="color:#888;font-size:13px;margin-bottom:16px;">
+      系統部署在雲端，印表機透過<strong>本地橋接器</strong>連接。<br>
+      在本機執行 <code>node print-bridge.js</code> 即可自動抓取訂單並列印。
+    </p>
+    <div class="form-row">
+      <div class="form-group"><label>Windows 印表機名稱</label><input id="setPrinterName" value="${settings.printer_name || ''}" placeholder="例如：XP-58IIH"></div>
+      <div class="form-group"><label>啟用印表機</label><select id="setPrinterEnabled"><option value="true" ${settings.printer_enabled === 'true' ? 'selected' : ''}>啟用</option><option value="false" ${settings.printer_enabled !== 'true' ? 'selected' : ''}>停用</option></select></div>
     </div>
     <button class="btn btn-primary" onclick="savePrinterSettings()">儲存印表機設定</button>
+
+    <div style="margin-top:20px;padding:16px;background:#f0f7ff;border-radius:10px;border-left:4px solid #2196F3;">
+      <h4 style="margin:0 0 8px;font-size:14px;color:#1565C0;">🔑 印表機 API Key（請妥善保管）</h4>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <code id="printerApiKey" style="flex:1;padding:8px 12px;background:#fff;border-radius:6px;font-size:13px;word-break:break-all;color:#333;">${settings.printer_api_key || '(載入中...)'}</code>
+        <button class="btn btn-primary btn-sm" onclick="copyApiKey()">📋 複製</button>
+      </div>
+      <p style="color:#888;font-size:11px;margin:8px 0 0;">此 Key 用於本地橋接器驗證，請勿外洩。</p>
+    </div>
+
+    <div style="margin-top:16px;padding:16px;background:#fffbe6;border-radius:10px;border-left:4px solid #FF6B35;">
+      <h4 style="margin:0 0 8px;font-size:14px;">📋 本地橋接器設定步驟</h4>
+      <ol style="margin:0;padding-left:20px;font-size:13px;color:#555;line-height:2;">
+        <li>複製 <code>print-bridge.config.example.json</code> 為 <code>print-bridge.config.json</code></li>
+        <li>編輯設定檔，填入上方 API Key 和印表機名稱</li>
+        <li>在本機執行：<code style="background:#ffe;padding:2px 6px;border-radius:3px;">node print-bridge.js</code></li>
+        <li>橋接器會自動輪詢雲端伺服器，有訂單就印出</li>
+      </ol>
+    </div>
   </div>
   <div class="card">
     <h3>📱 客人點餐頁面</h3>
@@ -467,10 +489,27 @@ async function saveSettings() {
 }
 
 async function savePrinterSettings() {
-  const iface = document.getElementById('setPrinterInterface').value.trim();
-  const ip = document.getElementById('setPrinterIp').value.trim();
-  await fetch(API + '/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ printer_interface: iface, printer_ip: ip }) });
+  const name = document.getElementById('setPrinterName').value.trim();
+  const enabled = document.getElementById('setPrinterEnabled').value;
+  await fetch(API + '/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ printer_name: name, printer_enabled: enabled }) });
   showToast('印表機設定已儲存');
+}
+
+async function copyApiKey() {
+  const key = document.getElementById('printerApiKey').textContent;
+  try {
+    await navigator.clipboard.writeText(key);
+    showToast('API Key 已複製到剪貼簿');
+  } catch {
+    // Fallback for older browsers
+    const input = document.createElement('textarea');
+    input.value = key;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    showToast('API Key 已複製到剪貼簿');
+  }
 }
 
 // === HELPERS ===

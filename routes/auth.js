@@ -70,6 +70,13 @@ router.post('/auth/register', (req, res) => {
   // auto-login after registration
   req.session.tenantId = result.lastInsertRowid;
   req.session.storeName = store_name.trim();
+
+  // Generate printer API key for new tenant
+  const printerKey = crypto.randomBytes(16).toString('hex');
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_api_key', ?)").run(result.lastInsertRowid, printerKey);
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_enabled', 'false')").run(result.lastInsertRowid);
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (?, 'printer_name', '')").run(result.lastInsertRowid);
+
   res.json({ success: true, tenant: { id: result.lastInsertRowid, store_name: store_name.trim() } });
 });
 

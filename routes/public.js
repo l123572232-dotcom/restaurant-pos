@@ -145,6 +145,27 @@ router.post('/orders', (req, res) => {
 
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_order_number' AND tenant_id = ?").run(String(nextNum), tid);
 
+  // Enqueue print job
+  const itemRows = db.prepare('SELECT id, name FROM items WHERE tenant_id = ?').all(tid);
+  const itemNames = {};
+  for (const row of itemRows) itemNames[row.id] = row.name;
+  const printData = JSON.stringify({
+    order_number: orderNumber,
+    total_price: totalPrice,
+    table_number: table_number,
+    note: note,
+    created_at: now.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+    items: items.map(item => ({
+      item_name: itemNames[item.item_id] || item.item_name || '',
+      quantity: item.quantity || 1,
+      size_name: item.size_name || '',
+      toppings: (item.toppings || []).map(t => ({ name: t.name }))
+    }))
+  });
+  db.prepare(
+    "INSERT INTO printer_queue (tenant_id, order_id, data, status) VALUES (?, ?, ?, 'pending')"
+  ).run(tid, orderId, printData);
+
   res.status(201).json({ order_number: orderNumber, status: 'pending' });
 });
 

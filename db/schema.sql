@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Default tenant for existing data migration
 INSERT OR IGNORE INTO tenants (id, username, password_hash, store_name) VALUES (1, 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', '測試便當店');
 
+CREATE TABLE IF NOT EXISTS printer_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  order_id INTEGER,
+  data TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now','localtime')),
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
 INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'store_name', '快餐店');
 INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'current_order_number', '0');
 INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'current_calling_number', '1');

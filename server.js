@@ -30,9 +30,16 @@ if (tenantCount === 0) {
   const adminHash = crypto.createHash('sha256').update('admin123').digest('hex');
   db.prepare("INSERT INTO tenants (username, password_hash, store_name, status) VALUES (?, ?, ?, 'active')").run('admin', adminHash, '系统管理');
   console.log('Created admin tenant (admin/admin123)');
+
+  // Generate default printer API key for admin
+  const printerKey = crypto.randomBytes(16).toString('hex');
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'printer_api_key', ?)").run(printerKey);
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'printer_enabled', 'false')").run();
+  db.prepare("INSERT OR IGNORE INTO settings (tenant_id, key, value) VALUES (1, 'printer_name', '')").run();
 }
 
 app.use('/api/public', require('./routes/public'));
+app.use('/api/printer', require('./routes/printer'));
 app.use('/api', require('./routes/auth').router);
 app.use('/api', require('./routes/tenants'));
 app.use('/api', require('./routes/menu'));
