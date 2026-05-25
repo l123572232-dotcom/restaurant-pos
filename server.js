@@ -17,7 +17,8 @@ app.use(require('express-session')({
   saveUninitialized: false,
   cookie: { maxAge: 86400000 }
 }));
-app.use(express.static(path.join(__dirname, 'public')));
+const serveStatic = require('serve-static');
+app.use(serveStatic(path.join(__dirname, 'public')));
 
 // Initialize DB and auto-seed if first run
 const db = getDb();

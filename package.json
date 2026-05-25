@@ -17,6 +17,7 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "node-thermal-printer": "^4.6.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "serve-static": "^2.2.0"
   }
 }
