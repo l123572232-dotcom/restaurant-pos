@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>廚房看板</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+button { cursor: pointer; border: none; font-family: inherit; }
+
+.top-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: #16213e; border-bottom: 2px solid #FF6B35; }
+.top-bar h1 { font-size: 28px; font-weight: 800; color: #FF6B35; }
+.top-bar .info { display: flex; align-items: center; gap: 24px; font-size: 15px; color: #aaa; }
+.top-bar .clock { font-size: 24px; font-weight: 700; color: #fff; }
+
+.calling-panel { display: flex; align-items: center; gap: 16px; padding: 16px 32px; background: #16213e; }
+.calling-panel .calling-label { font-size: 18px; font-weight: 700; color: #FF6B35; }
+.calling-panel .calling-number { font-size: 48px; font-weight: 900; color: #ffd700; background: #0f3460; padding: 8px 32px; border-radius: 16px; min-width: 120px; text-align: center; animation: pulse 2s infinite; }
+
+.orders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 16px 32px 32px; }
+.order-card { background: #16213e; border-radius: 16px; padding: 20px; border-left: 5px solid #FF6B35; transition: all 0.2s; }
+.order-card.preparing { border-left-color: #3498db; }
+.order-card .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.order-card .order-num { font-size: 22px; font-weight: 800; color: #ffd700; }
+.order-card .order-time { font-size: 13px; color: #888; }
+.order-card .order-meta { font-size: 13px; color: #aaa; margin-bottom: 10px; }
+.order-card .order-items { margin-bottom: 14px; }
+.order-card .order-item { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+.order-card .item-qty { background: #FF6B35; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 13px; font-weight: 700; min-width: 28px; text-align: center; }
+.order-card .item-name { font-size: 18px; font-weight: 600; }
+.order-card .item-detail { font-size: 12px; color: #888; margin-left: 4px; }
+.order-card .card-actions { display: flex; gap: 8px; }
+.order-card .btn { flex: 1; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 700; transition: all 0.15s; text-align: center; }
+.order-card .btn-prepare { background: #3498db; color: #fff; }
+.order-card .btn-prepare:hover { background: #2980b9; }
+.order-card .btn-done { background: #27ae60; color: #fff; }
+.order-card .btn-done:hover { background: #219a52; }
+.order-card .btn-call { background: #f39c12; color: #fff; }
+.order-card .btn-call:hover { background: #e67e22; }
+
+.empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: #555; }
+.empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+.empty-state .text { font-size: 24px; font-weight: 700; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <h1>🔥 廚房看板</h1>
+  <div class="info"><span class="clock" id="clock">--:--:--</span></div>
+</div>
+<div class="calling-panel">
+  <span class="calling-label">📢 取餐號碼</span>
+  <span class="calling-number" id="callingNum">--</span>
+</div>
+<div class="orders-grid" id="ordersGrid"><div class="empty-state"><div class="icon">✅</div><div class="text">目前沒有待處理訂單</div></div></div>
+
+<script>
+const API = '/api';
+let currentCallingNum = 0;
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+async function loadCallingNum() {
+  try {
+    const res = await fetch(API + '/settings');
+    const s = await res.json();
+    currentCallingNum = parseInt(s.current_calling_number || '1');
+    document.getElementById('callingNum').textContent = String(currentCallingNum).padStart(3, '0');
+  } catch (e) {}
+}
+
+async function loadOrders() {
+  try {
+    const [pendingRes, preparingRes] = await Promise.all([
+      fetch(API + '/orders?status=pending'),
+      fetch(API + '/orders?status=preparing')
+    ]);
+    const pending = await pendingRes.json();
+    const preparing = await preparingRes.json();
+    const orders = [...pending, ...preparing].sort((a, b) => a.id - b.id);
+    renderOrders(orders);
+  } catch (e) {}
+}
+
+function renderOrders(orders) {
+  const grid = document.getElementById('ordersGrid');
+  if (orders.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="icon">✅</div><div class="text">目前沒有待處理訂單</div></div>';
+    return;
+  }
+
+  grid.innerHTML = orders.map(o => {
+    const time = new Date(o.created_at + 'Z').toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="order-card ${o.status}" id="order-${o.id}">
+      <div class="card-header">
+        <span class="order-num">#${o.order_number}</span>
+        <span class="order-time">${time}</span>
+      </div>
+      ${o.table_number ? `<div class="order-meta">桌號：${o.table_number}</div>` : ''}
+      <div class="order-items">${(o.items || []).map(i => {
+        const tpStr = (i.toppings || []).length > 0 ? '+' + i.toppings.map(t => t.name).join('+') : '';
+        const detail = [i.size_name, tpStr].filter(Boolean).join(' ');
+        return `<div class="order-item">
+          <span class="item-qty">${i.quantity}x</span>
+          <span class="item-name">${i.item_name}</span>
+          ${detail ? `<span class="item-detail">(${detail})</span>` : ''}
+        </div>`;
+      }).join('')}</div>
+      ${o.note ? `<div class="order-meta" style="color:#f39c12;">備註：${o.note}</div>` : ''}
+      <div class="card-actions">
+        ${o.status === 'pending' ? `<button class="btn btn-prepare" onclick="updateStatus(${o.id},'preparing')">開始製作</button>` : ''}
+        <button class="btn btn-done" onclick="updateStatus(${o.id},'done')">完成</button>
+        <button class="btn btn-call" onclick="callOrder(${o.id},'${o.order_number}')">📢 叫號</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function updateStatus(id, status) {
+  try {
+    const card = document.getElementById('order-' + id);
+    if (card) card.style.opacity = '0.5';
+    await fetch(API + '/orders/' + id + '/status', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
+    });
+    // If done, remove with animation
+    if (status === 'done') {
+      setTimeout(() => { if (card) { card.style.transition = 'all 0.4s'; card.style.transform = 'scale(0.8)'; card.style.opacity = '0'; setTimeout(loadOrders, 400); }}, 200);
+    } else {
+      loadOrders();
+    }
+  } catch (e) {}
+}
+
+async function callOrder(id, orderNumber) {
+  try {
+    const res = await fetch(API + '/orders/' + id + '/call', { method: 'PUT' });
+    const data = await res.json();
+    document.getElementById('callingNum').textContent = String(data.calling_number).padStart(3, '0');
+    // Flash effect
+    const el = document.getElementById('callingNum');
+    el.style.transform = 'scale(1.3)';
+    el.style.transition = 'transform 0.15s';
+    setTimeout(() => el.style.transform = 'scale(1)', 150);
+
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(`${orderNumber.replace(/-/g, '號 ')}號 請取餐`);
+      u.lang = 'zh-TW'; u.rate = 0.9;
+      speechSynthesis.speak(u);
+    }
+  } catch (e) {}
+}
+
+loadCallingNum();
+loadOrders();
+setInterval(loadOrders, 5000);
+setInterval(loadCallingNum, 30000);
+</script>
+</body>
+</html>

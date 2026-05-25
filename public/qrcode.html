@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Code 點餐</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: linear-gradient(135deg, #f0f2f5 0%, #e8eaed 100%); color: #1a1a1a; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+button { cursor: pointer; border: none; font-family: inherit; }
+
+.card { background: #fff; border-radius: 24px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.1); text-align: center; max-width: 480px; width: 100%; }
+.card h1 { font-size: 28px; font-weight: 800; color: #FF6B35; margin-bottom: 8px; }
+.card .subtitle { color: #888; font-size: 15px; margin-bottom: 32px; }
+
+.qr-container { display: flex; align-items: center; justify-content: center; padding: 24px; background: #fafafa; border-radius: 16px; margin-bottom: 24px; border: 2px dashed #e0e0e0; }
+.qr-container img { max-width: 240px; height: auto; }
+.qr-placeholder { color: #ccc; font-size: 14px; padding: 40px; }
+
+.btn-download { padding: 14px 36px; background: #FF6B35; color: #fff; font-size: 16px; font-weight: 700; border-radius: 12px; transition: all 0.2s; }
+.btn-download:hover { background: #e55a2b; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,53,0.3); }
+
+.instructions { margin-top: 28px; padding: 20px; background: #f8f9fa; border-radius: 12px; text-align: left; }
+.instructions h3 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: #555; }
+.instructions ol { padding-left: 20px; color: #666; font-size: 14px; line-height: 1.8; }
+.instructions code { background: #eee; padding: 2px 8px; border-radius: 4px; font-size: 13px; color: #FF6B35; }
+
+.url-display { margin: 16px 0; padding: 12px 16px; background: #f0f2f5; border-radius: 10px; font-size: 15px; font-family: monospace; color: #FF6B35; word-break: break-all; }
+
+.toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: #fff; padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600; z-index: 200; box-shadow: 0 8px 24px rgba(46,204,113,0.3); animation: slideDown 0.3s; }
+.toast.error { background: #e74c3c; box-shadow: 0 8px 24px rgba(231,76,60,0.3); }
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📱 掃碼點餐</h1>
+  <p class="subtitle">顧客掃描此 QR Code 即可自助點餐</p>
+
+  <div class="qr-container" id="qrContainer">
+    <div class="qr-placeholder">載入中...</div>
+  </div>
+
+  <div class="url-display" id="urlDisplay">載入中...</div>
+
+  <button class="btn-download" id="downloadBtn">📥 下載 QR Code</button>
+
+  <div class="instructions">
+    <h3>📋 使用說明</h3>
+    <ol>
+      <li>將此頁面顯示在櫃檯或桌牌上</li>
+      <li>顧客用手機相機掃描 QR Code</li>
+      <li>手機瀏覽器將自動打開點餐頁面</li>
+      <li>顧客選擇商品後送出訂單</li>
+      <li>廚房看板會即時顯示新訂單</li>
+    </ol>
+    <p style="margin-top:12px;font-size:13px;color:#888;">💡 提示：請確認手機與 POS 系統連接相同 Wi-Fi 網路 (<code>192.168.31.x</code>)</p>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let qrDataUrl = '';
+let qrUrl = '';
+
+async function init() {
+  try {
+    const res = await fetch(API + '/settings/qrcode');
+    const data = await res.json();
+    qrDataUrl = data.qrcode;
+    qrUrl = data.url;
+
+    document.getElementById('qrContainer').innerHTML = `<img src="${qrDataUrl}" alt="QR Code" style="max-width:240px;">`;
+    document.getElementById('urlDisplay').textContent = qrUrl;
+  } catch (e) {
+    document.getElementById('qrContainer').innerHTML = '<div class="qr-placeholder" style="color:#e74c3c;">載入失敗，請確認伺服器已啟動</div>';
+    document.getElementById('urlDisplay').textContent = '無法載入';
+  }
+}
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (!qrDataUrl) return;
+  const a = document.createElement('a');
+  a.href = qrDataUrl;
+  a.download = 'restaurant-qrcode.png';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('QR Code 已下載');
+});
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>

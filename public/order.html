@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>掃碼點餐</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #1a1a1a; max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: 180px; }
+button { cursor: pointer; border: none; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+
+.header { background: linear-gradient(135deg, #FF6B35, #e55a2b); color: #fff; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
+.header h1 { font-size: 22px; font-weight: 700; }
+.header .sub { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+.cat-tabs { display: flex; gap: 6px; padding: 12px 16px; overflow-x: auto; background: #fff; position: sticky; top: 82px; z-index: 9; border-bottom: 1px solid #f0f0f0; -webkit-overflow-scrolling: touch; }
+.cat-tabs::-webkit-scrollbar { display: none; }
+.cat-tab { padding: 10px 18px; border-radius: 22px; font-size: 14px; font-weight: 600; background: #f0f2f5; color: #555; white-space: nowrap; flex-shrink: 0; transition: all 0.2s; }
+.cat-tab.active { background: #FF6B35; color: #fff; box-shadow: 0 4px 12px rgba(255,107,53,0.3); }
+
+.items-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.item-card { background: #fff; border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+.item-card:active { transform: scale(0.98); background: #fafafa; }
+.item-card .emoji { font-size: 42px; min-width: 52px; text-align: center; line-height: 1; }
+.item-card .info { flex: 1; min-width: 0; }
+.item-card .name { font-size: 16px; font-weight: 700; }
+.item-card .meta { font-size: 12px; color: #888; margin-top: 4px; }
+.item-card .price { font-size: 17px; color: #FF6B35; font-weight: 700; margin-top: 4px; }
+.item-card .arrow { color: #ccc; font-size: 20px; }
+
+.cart-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 2px solid #eee; padding: 14px 16px 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.08); z-index: 20; }
+.cart-bar .summary { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cart-bar .summary-left { display: flex; align-items: center; gap: 10px; }
+.cart-bar .cart-icon { position: relative; font-size: 28px; }
+.cart-bar .cart-badge { position: absolute; top: -6px; right: -8px; background: #e74c3c; color: #fff; font-size: 11px; font-weight: 700; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.cart-bar .total { font-size: 18px; font-weight: 800; color: #FF6B35; }
+.cart-bar .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #FF6B35, #e55a2b); color: #fff; font-size: 17px; font-weight: 700; border-radius: 14px; transition: all 0.2s; margin-top: 4px; }
+.cart-bar .submit-btn:active { transform: scale(0.97); }
+.cart-bar .submit-btn:disabled { background: #ccc; }
+
+.cart-detail { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: #fff; }
+.cart-detail.hidden { display: none; }
+.cart-detail .cd-header { background: #FF6B35; color: #fff; padding: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 18px; font-weight: 700; }
+.cart-detail .cd-header button { background: none; color: #fff; font-size: 22px; font-weight: 700; padding: 4px 12px; }
+.cart-detail .cd-items { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.cart-detail .cd-item { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+.cart-detail .cd-info { flex: 1; min-width: 0; }
+.cart-detail .cd-name { font-size: 15px; font-weight: 600; }
+.cart-detail .cd-detail { font-size: 12px; color: #888; margin-top: 3px; }
+.cart-detail .cd-price { font-size: 15px; color: #FF6B35; font-weight: 700; white-space: nowrap; }
+.cart-detail .cd-qty { width: 32px; height: 32px; border-radius: 50%; background: #f0f2f5; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.cart-detail .cd-qty:active { background: #FF6B35; color: #fff; }
+.cart-detail .cd-remove { background: none; color: #ccc; font-size: 18px; padding: 6px; }
+.cart-detail .cd-footer { padding: 16px; border-top: 2px solid #eee; }
+.cart-detail .cd-footer .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #FF6B35, #e55a2b); color: #fff; font-size: 17px; font-weight: 700; border-radius: 14px; margin-top: 8px; }
+.cart-detail .cd-footer .submit-btn:disabled { background: #ccc; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: flex-end; justify-content: center; z-index: 50; animation: fadeIn 0.15s; }
+.modal { background: #fff; border-radius: 20px 20px 0 0; padding: 24px 20px 36px; width: 100%; max-width: 480px; max-height: 75vh; overflow-y: auto; animation: slideUp 0.25s; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); }
+.modal h3 { font-size: 20px; margin-bottom: 18px; text-align: center; }
+.modal .section { margin-bottom: 18px; }
+.modal .section-title { font-size: 13px; font-weight: 600; color: #888; margin-bottom: 10px; }
+.modal .option-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.modal .option-btn { padding: 12px 18px; border-radius: 12px; font-size: 15px; font-weight: 600; background: #f0f2f5; color: #555; transition: all 0.15s; }
+.modal .option-btn:active { transform: scale(0.96); }
+.modal .option-btn.selected { background: #FF6B35; color: #fff; }
+.modal .topping-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; font-size: 15px; }
+.modal .topping-item input[type=checkbox] { width: 20px; height: 20px; accent-color: #FF6B35; }
+.modal .tp-price { font-size: 13px; color: #888; }
+.modal .modal-actions { display: flex; gap: 12px; margin-top: 16px; }
+.modal .modal-cancel { flex: 1; padding: 14px; background: #f0f2f5; border-radius: 14px; font-size: 16px; font-weight: 600; color: #666; }
+.modal .modal-add { flex: 2; padding: 14px; background: linear-gradient(135deg, #FF6B35, #e55a2b); color: #fff; border-radius: 14px; font-size: 16px; font-weight: 700; }
+
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: #fff; padding: 14px 24px; border-radius: 12px; font-size: 16px; font-weight: 600; z-index: 100; box-shadow: 0 8px 24px rgba(46,204,113,0.3); animation: slideDown 0.3s; }
+.toast.error { background: #e74c3c; box-shadow: 0 8px 24px rgba(231,76,60,0.3); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+</style>
+</head>
+<body>
+<div class="header"><h1 id="storeName">快餐店</h1><div class="sub">歡迎光臨 · 掃碼點餐</div></div>
+<div class="cat-tabs" id="catTabs"></div>
+<div class="items-list" id="itemsList"></div>
+
+<div class="cart-bar" id="cartBar">
+  <div class="summary">
+    <div class="summary-left">
+      <div class="cart-icon" id="cartToggle">🛒<span class="cart-badge" id="cartBadge" style="display:none">0</span></div>
+      <span style="font-size:14px;color:#888;">已選商品</span>
+    </div>
+    <span class="total" id="cartTotal">NT$0</span>
+  </div>
+  <button class="submit-btn" id="quickSubmit" disabled>立即點餐</button>
+</div>
+
+<div class="cart-detail hidden" id="cartDetail">
+  <div class="cd-header"><span>🛒 購物車</span><button id="cartClose">✕</button></div>
+  <div class="cd-items" id="cartDetailItems"></div>
+  <div class="cd-footer">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:700;">
+      <span>合計</span><span style="color:#FF6B35;font-size:22px;" id="cartDetailTotal">NT$0</span>
+    </div>
+    <button class="submit-btn" id="detailSubmit" disabled>送出訂單</button>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let menu = { categories: [], itemsByCat: {} };
+let cart = [];
+let activeCat = null;
+
+async function init() {
+  const [menuRes, settingsRes] = await Promise.all([fetch(API + '/menu'), fetch(API + '/settings')]);
+  menu.categories = await menuRes.json();
+  const settings = await settingsRes.json();
+  document.getElementById('storeName').textContent = settings.store_name || '快餐店';
+
+  for (const cat of menu.categories) menu.itemsByCat[cat.id] = cat.items;
+  renderCatTabs();
+  if (menu.categories.length > 0) selectCategory(menu.categories[0].id);
+  bindEvents();
+}
+
+function renderCatTabs() {
+  document.getElementById('catTabs').innerHTML = menu.categories.map(c =>
+    `<button class="cat-tab" data-cat="${c.id}">${c.name}</button>`
+  ).join('');
+  document.querySelectorAll('.cat-tab').forEach(b => b.addEventListener('click', () => selectCategory(Number(b.dataset.cat))));
+}
+
+function selectCategory(catId) {
+  activeCat = catId;
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', Number(b.dataset.cat) === catId));
+  renderItems(catId);
+}
+
+function renderItems(catId) {
+  const items = menu.itemsByCat[catId] || [];
+  document.getElementById('itemsList').innerHTML = items.map(i => `
+    <div class="item-card" data-id="${i.id}" data-name="${i.name}" data-price="${i.base_price}" data-sizes='${JSON.stringify(i.sizes)}' data-toppings='${JSON.stringify(i.toppings)}' data-emoji="${i.emoji || ''}">
+      ${i.emoji ? `<span class="emoji">${i.emoji}</span>` : ''}
+      <div class="info">
+        <div class="name">${i.name}</div>
+        ${i.sizes.length > 0 ? `<div class="meta">${i.sizes.map(s => s.name).join(' / ')}</div>` : ''}
+        <div class="price">NT$${i.base_price}</div>
+      </div>
+      <span class="arrow">›</span>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.item-card').forEach(card => card.addEventListener('click', () => openItemModal(card)));
+}
+
+function openItemModal(card) {
+  const id = Number(card.dataset.id);
+  const name = card.dataset.name;
+  const price = Number(card.dataset.price);
+  const sizes = JSON.parse(card.dataset.sizes || '[]');
+  const toppings = JSON.parse(card.dataset.toppings || '[]');
+  const emoji = card.dataset.emoji || '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const sizeRows = sizes.length > 0 ? `
+    <div class="section"><div class="section-title">選擇規格</div><div class="option-group">
+      <button class="option-btn selected" data-size="" data-adjust="0">標準 NT$${price}</button>
+      ${sizes.map(s => `<button class="option-btn" data-size="${s.name}" data-adjust="${s.price_adjust}">${s.name} ${s.price_adjust > 0 ? '+NT$' + s.price_adjust : ''}</button>`).join('')}
+    </div></div>` : '';
+
+  const toppingRows = toppings.length > 0 ? `
+    <div class="section"><div class="section-title">加料（可多選）</div>
+    ${toppings.map(t => `
+      <label class="topping-item">
+        <input type="checkbox" data-topping="${t.name}" data-adjust="${t.price_adjust}">
+        <span>${t.name}</span>
+        ${t.price_adjust > 0 ? `<span class="tp-price">+NT$${t.price_adjust}</span>` : ''}
+      </label>`).join('')}
+    </div>` : '';
+
+  overlay.innerHTML = `<div class="modal"><h3>${emoji} ${name}</h3>${sizeRows}${toppingRows}
+    <div class="modal-actions"><button class="modal-cancel">取消</button><button class="modal-add">加入購物車 — NT$${price}</button></div></div>`;
+  document.body.appendChild(overlay);
+
+  let selectedSize = '', sizeAdjust = 0;
+  const selectedToppings = [];
+  const addBtn = overlay.querySelector('.modal-add');
+
+  overlay.querySelectorAll('.option-btn').forEach(b => b.addEventListener('click', () => {
+    overlay.querySelectorAll('.option-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedSize = b.dataset.size;
+    sizeAdjust = Number(b.dataset.adjust || 0);
+    updateAddBtn();
+  }));
+
+  overlay.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    const t = { name: cb.dataset.topping, price_adjust: Number(cb.dataset.adjust || 0) };
+    if (cb.checked) selectedToppings.push(t); else {
+      const idx = selectedToppings.findIndex(x => x.name === t.name);
+      if (idx >= 0) selectedToppings.splice(idx, 1);
+    }
+    updateAddBtn();
+  }));
+
+  function updateAddBtn() {
+    const tpTotal = selectedToppings.reduce((s, t) => s + t.price_adjust, 0);
+    addBtn.textContent = `加入購物車 — NT$${price + sizeAdjust + tpTotal}`;
+  }
+
+  overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  addBtn.addEventListener('click', () => {
+    const tpTotal = selectedToppings.reduce((s, t) => s + t.price_adjust, 0);
+    const key = JSON.stringify({ id, size: selectedSize, toppings: selectedToppings.map(t => t.name).sort() });
+    const existing = cart.find(c => c.key === key);
+    if (existing) existing.quantity++;
+    else cart.push({ key, item_id: id, item_name: name, emoji, base_price: price, size_name: selectedSize, size_adjust: sizeAdjust, toppings: selectedToppings.map(t => ({ name: t.name, price_adjust: t.price_adjust })), quantity: 1, unitPrice: price + sizeAdjust + tpTotal });
+    overlay.remove();
+    updateCartUI();
+  });
+}
+
+function updateCartUI() {
+  const totalQty = cart.reduce((s, c) => s + c.quantity, 0);
+  const totalPrice = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
+  const badge = document.getElementById('cartBadge');
+  const quickSubmit = document.getElementById('quickSubmit');
+  const detailSubmit = document.getElementById('detailSubmit');
+
+  if (totalQty > 0) { badge.style.display = 'flex'; badge.textContent = totalQty; }
+  else badge.style.display = 'none';
+
+  const totalStr = 'NT$' + totalPrice;
+  document.getElementById('cartTotal').textContent = totalStr;
+  quickSubmit.disabled = totalQty === 0;
+  detailSubmit.disabled = totalQty === 0;
+
+  const detailItems = document.getElementById('cartDetailItems');
+  document.getElementById('cartDetailTotal').textContent = totalStr;
+
+  if (cart.length === 0) { detailItems.innerHTML = '<div style="text-align:center;color:#bbb;padding:60px 0;font-size:16px;">購物車是空的</div>'; return; }
+
+  detailItems.innerHTML = cart.map((item, idx) => {
+    const tpStr = item.toppings.length > 0 ? '+' + item.toppings.map(t => t.name).join('+') : '';
+    const detail = [item.size_name, tpStr].filter(Boolean).join(' ');
+    return `<div class="cd-item">
+      <div class="cd-info"><div class="cd-name">${item.emoji||''} ${item.item_name}</div>${detail?`<div class="cd-detail">${detail}</div>`:''}</div>
+      <button class="cd-qty" data-idx="${idx}" data-d="-1">−</button>
+      <span style="font-weight:600;min-width:20px;text-align:center;">${item.quantity}</span>
+      <button class="cd-qty" data-idx="${idx}" data-d="1">+</button>
+      <span class="cd-price">NT$${item.unitPrice * item.quantity}</span>
+      <button class="cd-remove" data-idx="${idx}">✕</button>
+    </div>`;
+  }).join('');
+
+  detailItems.querySelectorAll('.cd-qty').forEach(b => b.addEventListener('click', () => {
+    const idx = Number(b.dataset.idx), d = Number(b.dataset.d);
+    cart[idx].quantity += d;
+    if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+    updateCartUI();
+  }));
+  detailItems.querySelectorAll('.cd-remove').forEach(b => b.addEventListener('click', () => {
+    cart.splice(Number(b.dataset.idx), 1); updateCartUI();
+  }));
+}
+
+function bindEvents() {
+  document.getElementById('cartToggle').addEventListener('click', () => {
+    updateCartUI();
+    document.getElementById('cartDetail').classList.remove('hidden');
+  });
+  document.getElementById('cartClose').addEventListener('click', () => document.getElementById('cartDetail').classList.add('hidden'));
+
+  async function submitOrder() {
+    const btn = document.activeElement;
+    btn.disabled = true; btn.textContent = '送出中...';
+    try {
+      const res = await fetch(API + '/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cart.map(c => ({ item_id: c.item_id, item_name: c.item_name, base_price: c.base_price, size_name: c.size_name, size_adjust: c.size_adjust, quantity: c.quantity, toppings: c.toppings })) })
+      });
+      if (!res.ok) throw new Error('Failed');
+      const order = await res.json();
+      showToast(`點餐成功！取餐號：${order.order_number}`);
+      cart = []; updateCartUI();
+      document.getElementById('cartDetail').classList.add('hidden');
+    } catch (e) { showToast('送出失敗，請重試', true); }
+    btn.disabled = false; btn.textContent = '送出訂單';
+  }
+
+  document.getElementById('quickSubmit').addEventListener('click', submitOrder);
+  document.getElementById('detailSubmit').addEventListener('click', async () => {
+    updateCartUI();
+    await new Promise(r => setTimeout(r, 100));
+    const btn = document.getElementById('detailSubmit');
+    btn.disabled = true; btn.textContent = '送出中...';
+    try {
+      const res = await fetch(API + '/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cart.map(c => ({ item_id: c.item_id, item_name: c.item_name, base_price: c.base_price, size_name: c.size_name, size_adjust: c.size_adjust, quantity: c.quantity, toppings: c.toppings })) })
+      });
+      if (!res.ok) throw new Error('Failed');
+      const order = await res.json();
+      showToast(`點餐成功！取餐號：${order.order_number}`);
+      cart = []; updateCartUI();
+      document.getElementById('cartDetail').classList.add('hidden');
+    } catch (e) { showToast('送出失敗，請重試', true); }
+    btn.disabled = false; btn.textContent = '送出訂單';
+  });
+}
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>

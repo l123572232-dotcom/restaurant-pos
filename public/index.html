@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>櫃檯點餐</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #1a1a1a; height: 100vh; overflow: hidden; }
+button { cursor: pointer; border: none; font-family: inherit; }
+input, select { font-family: inherit; }
+
+.app { display: flex; height: 100vh; }
+.left { width: 60%; display: flex; flex-direction: column; background: #fff; }
+.right { width: 40%; display: flex; flex-direction: column; background: #f8f9fa; border-left: 1px solid #e8e8e8; }
+
+.header { background: #FF6B35; color: #fff; padding: 16px 24px; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+.header .store-name { font-size: 24px; }
+
+.categories { display: flex; gap: 4px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #f0f0f0; overflow-x: auto; }
+.cat-btn { padding: 8px 18px; border-radius: 20px; font-size: 14px; font-weight: 500; background: #f0f2f5; color: #555; white-space: nowrap; transition: all 0.2s; }
+.cat-btn:hover { background: #ffe0d0; color: #FF6B35; }
+.cat-btn.active { background: #FF6B35; color: #fff; }
+
+.items-grid { flex: 1; overflow-y: auto; padding: 16px 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-content: start; }
+.item-card { background: #fff; border: 2px solid #f0f0f0; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.item-card:hover { border-color: #FF6B35; box-shadow: 0 4px 12px rgba(255,107,53,0.15); transform: translateY(-1px); }
+.item-card .emoji { font-size: 36px; line-height: 1; }
+.item-card .name { font-size: 15px; font-weight: 600; text-align: center; }
+.item-card .price { font-size: 14px; color: #FF6B35; font-weight: 700; }
+
+.cart-header { padding: 20px 24px 12px; font-size: 18px; font-weight: 700; color: #1a1a1a; border-bottom: 2px solid #FF6B35; }
+.cart-items { flex: 1; overflow-y: auto; padding: 0 24px; }
+.cart-item { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #eee; }
+.cart-item .info { flex: 1; min-width: 0; }
+.cart-item .item-name { font-size: 15px; font-weight: 600; }
+.cart-item .item-detail { font-size: 12px; color: #888; margin-top: 2px; }
+.cart-item .item-price { font-size: 14px; color: #FF6B35; font-weight: 600; white-space: nowrap; }
+.cart-item .qty-controls { display: flex; align-items: center; gap: 6px; }
+.cart-item .qty-controls button { width: 28px; height: 28px; border-radius: 50%; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: #f0f2f5; color: #333; transition: all 0.15s; }
+.cart-item .qty-controls button:hover { background: #FF6B35; color: #fff; }
+.cart-item .qty-controls span { font-size: 15px; font-weight: 600; width: 24px; text-align: center; }
+.cart-item .remove-btn { background: none; color: #ccc; font-size: 18px; padding: 4px; }
+.cart-item .remove-btn:hover { color: #e74c3c; }
+
+.cart-footer { padding: 16px 24px; background: #fff; border-top: 2px solid #eee; }
+.cart-footer .total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.cart-footer .total-label { font-size: 16px; font-weight: 600; }
+.cart-footer .total-price { font-size: 24px; font-weight: 800; color: #FF6B35; }
+.cart-footer .actions { display: flex; gap: 10px; }
+.cart-footer .table-input { flex: 1; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+.cart-footer .table-input:focus { border-color: #FF6B35; }
+.cart-footer .submit-btn { padding: 12px 32px; background: #FF6B35; color: #fff; font-size: 16px; font-weight: 700; border-radius: 10px; transition: all 0.2s; }
+.cart-footer .submit-btn:hover { background: #e55a2b; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,107,53,0.3); }
+.cart-footer .submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+.cart-footer .clear-btn { padding: 12px 20px; background: #fff; color: #888; font-size: 14px; border: 2px solid #e0e0e0; border-radius: 10px; transition: all 0.2s; }
+.cart-footer .clear-btn:hover { border-color: #e74c3c; color: #e74c3c; }
+
+.empty-cart { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #bbb; gap: 12px; }
+.empty-cart .icon { font-size: 64px; }
+.empty-cart .text { font-size: 16px; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.15s; }
+.modal { background: #fff; border-radius: 16px; padding: 28px; width: 420px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: slideUp 0.2s; }
+.modal h3 { font-size: 20px; margin-bottom: 20px; }
+.modal .section { margin-bottom: 20px; }
+.modal .section-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 8px; }
+.modal .option-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.modal .option-btn { padding: 8px 16px; border-radius: 8px; font-size: 14px; background: #f0f2f5; color: #555; transition: all 0.15s; }
+.modal .option-btn:hover { background: #ffe0d0; color: #FF6B35; }
+.modal .option-btn.selected { background: #FF6B35; color: #fff; }
+.modal .topping-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.modal .topping-item input[type=checkbox] { width: 18px; height: 18px; accent-color: #FF6B35; }
+.modal .topping-item .tp-price { font-size: 12px; color: #888; }
+.modal .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+.modal .modal-cancel { flex: 1; padding: 12px; background: #f0f2f5; border-radius: 10px; font-size: 15px; font-weight: 600; color: #666; }
+.modal .modal-add { flex: 2; padding: 12px; background: #FF6B35; color: #fff; border-radius: 10px; font-size: 15px; font-weight: 700; }
+
+.toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: #fff; padding: 14px 28px; border-radius: 10px; font-size: 16px; font-weight: 600; z-index: 200; box-shadow: 0 8px 24px rgba(46,204,113,0.3); animation: slideDown 0.3s; }
+.toast.error { background: #e74c3c; box-shadow: 0 8px 24px rgba(231,76,60,0.3); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="left">
+    <div class="header"><span class="store-name" id="storeName">快餐店</span><span>櫃檯點餐</span></div>
+    <div class="categories" id="categories"></div>
+    <div class="items-grid" id="itemsGrid"></div>
+  </div>
+  <div class="right">
+    <div class="cart-header">🛒 購物車</div>
+    <div class="cart-items" id="cartItems">
+      <div class="empty-cart"><span class="icon">🛒</span><span class="text">尚未選擇商品</span></div>
+    </div>
+    <div class="cart-footer">
+      <div class="total-row"><span class="total-label">合計</span><span class="total-price" id="totalPrice">NT$0</span></div>
+      <div class="actions">
+        <input type="text" class="table-input" id="tableInput" placeholder="桌號 (選填)">
+        <button class="clear-btn" id="clearCart">清空</button>
+        <button class="submit-btn" id="submitOrder" disabled>送出訂單</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let menu = { categories: [], itemsByCat: {} };
+let cart = [];
+let activeCat = null;
+
+async function init() {
+  const [menuRes, settingsRes] = await Promise.all([
+    fetch(API + '/menu'), fetch(API + '/settings')
+  ]);
+  menu.categories = await menuRes.json();
+  const settings = await settingsRes.json();
+  document.getElementById('storeName').textContent = settings.store_name || '快餐店';
+
+  for (const cat of menu.categories) {
+    menu.itemsByCat[cat.id] = cat.items;
+  }
+
+  renderCategories();
+  if (menu.categories.length > 0) selectCategory(menu.categories[0].id);
+  renderCart();
+}
+
+function renderCategories() {
+  const el = document.getElementById('categories');
+  el.innerHTML = menu.categories.map(c =>
+    `<button class="cat-btn" data-cat="${c.id}">${c.name}</button>`
+  ).join('');
+  el.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => selectCategory(Number(b.dataset.cat))));
+}
+
+function selectCategory(catId) {
+  activeCat = catId;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.cat) === catId));
+  renderItems(catId);
+}
+
+function renderItems(catId) {
+  const el = document.getElementById('itemsGrid');
+  const items = menu.itemsByCat[catId] || [];
+  el.innerHTML = items.map(i => `
+    <div class="item-card" data-id="${i.id}" data-name="${i.name}" data-price="${i.base_price}" data-sizes='${JSON.stringify(i.sizes)}' data-toppings='${JSON.stringify(i.toppings)}' data-emoji="${i.emoji || ''}">
+      ${i.emoji ? `<span class="emoji">${i.emoji}</span>` : ''}
+      <span class="name">${i.name}</span>
+      <span class="price">NT$${i.base_price}</span>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.item-card').forEach(card => {
+    card.addEventListener('click', () => openItemModal(card));
+  });
+}
+
+function openItemModal(card) {
+  const id = Number(card.dataset.id);
+  const name = card.dataset.name;
+  const price = Number(card.dataset.price);
+  const sizes = JSON.parse(card.dataset.sizes || '[]');
+  const toppings = JSON.parse(card.dataset.toppings || '[]');
+  const emoji = card.dataset.emoji || '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const sizeRows = sizes.length > 0 ? `
+    <div class="section">
+      <div class="section-title">規格</div>
+      <div class="option-group">
+        <button class="option-btn selected" data-size="">標準 NT$${price}</button>
+        ${sizes.map(s => `<button class="option-btn" data-size="${s.name}" data-adjust="${s.price_adjust}">${s.name} ${s.price_adjust > 0 ? '+NT$' + s.price_adjust : ''}</button>`).join('')}
+      </div>
+    </div>` : '';
+
+  const toppingRows = toppings.length > 0 ? `
+    <div class="section">
+      <div class="section-title">加料</div>
+      ${toppings.map(t => `
+        <label class="topping-item">
+          <input type="checkbox" data-topping="${t.name}" data-adjust="${t.price_adjust}">
+          <span>${t.name}</span>
+          ${t.price_adjust > 0 ? `<span class="tp-price">+NT$${t.price_adjust}</span>` : ''}
+        </label>
+      `).join('')}
+    </div>` : '';
+
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${emoji} ${name}</h3>
+      ${sizeRows}
+      ${toppingRows}
+      <div class="modal-actions">
+        <button class="modal-cancel">取消</button>
+        <button class="modal-add">加入購物車 — NT$${price}</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  let selectedSize = '', sizeAdjust = 0;
+  const selectedToppings = [];
+  const addBtn = overlay.querySelector('.modal-add');
+
+  overlay.querySelectorAll('.option-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      overlay.querySelectorAll('.option-btn').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+      selectedSize = b.dataset.size;
+      sizeAdjust = Number(b.dataset.adjust || 0);
+      updateAddBtn();
+    });
+  });
+
+  overlay.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const t = { name: cb.dataset.topping, price_adjust: Number(cb.dataset.adjust || 0) };
+      if (cb.checked) selectedToppings.push(t); else {
+        const idx = selectedToppings.findIndex(x => x.name === t.name);
+        if (idx >= 0) selectedToppings.splice(idx, 1);
+      }
+      updateAddBtn();
+    });
+  });
+
+  function updateAddBtn() {
+    const tpTotal = selectedToppings.reduce((s, t) => s + t.price_adjust, 0);
+    addBtn.textContent = `加入購物車 — NT$${price + sizeAdjust + tpTotal}`;
+  }
+
+  overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  addBtn.addEventListener('click', () => {
+    const tpTotal = selectedToppings.reduce((s, t) => s + t.price_adjust, 0);
+    addToCart({ item_id: id, item_name: name, emoji, base_price: price, size_name: selectedSize, size_adjust: sizeAdjust, toppings: selectedToppings.map(t => ({ name: t.name, price_adjust: t.price_adjust })), quantity: 1, unitPrice: price + sizeAdjust + tpTotal });
+    overlay.remove();
+  });
+}
+
+function addToCart(item) {
+  const key = JSON.stringify({ id: item.item_id, size: item.size_name, toppings: item.toppings.map(t => t.name).sort() });
+  const existing = cart.find(c => c.key === key);
+  if (existing) { existing.quantity++; existing.unitPrice = item.unitPrice; }
+  else cart.push({ ...item, key });
+  renderCart();
+}
+
+function removeFromCart(idx) { cart.splice(idx, 1); renderCart(); }
+
+function renderCart() {
+  const el = document.getElementById('cartItems');
+  const totalEl = document.getElementById('totalPrice');
+  const submitBtn = document.getElementById('submitOrder');
+
+  if (cart.length === 0) {
+    el.innerHTML = '<div class="empty-cart"><span class="icon">🛒</span><span class="text">尚未選擇商品</span></div>';
+    totalEl.textContent = 'NT$0';
+    submitBtn.disabled = true;
+    return;
+  }
+
+  let total = 0;
+  el.innerHTML = cart.map((item, idx) => {
+    const tpStr = item.toppings.length > 0 ? '+' + item.toppings.map(t => t.name).join('+') : '';
+    const sizeStr = item.size_name || '';
+    const detail = [sizeStr, tpStr].filter(Boolean).join(' ');
+    const lineTotal = item.unitPrice * item.quantity;
+    total += lineTotal;
+    return `
+      <div class="cart-item">
+        <div class="info">
+          <div class="item-name">${item.emoji || ''} ${item.item_name} <span style="font-size:12px;color:#888;">x${item.quantity}</span></div>
+          ${detail ? `<div class="item-detail">${detail}</div>` : ''}
+        </div>
+        <div class="qty-controls">
+          <button onclick="adjustQty(${idx}, -1)">−</button>
+          <span>${item.quantity}</span>
+          <button onclick="adjustQty(${idx}, 1)">+</button>
+        </div>
+        <span class="item-price">NT$${lineTotal}</span>
+        <button class="remove-btn" onclick="removeFromCart(${idx})">✕</button>
+      </div>`;
+  }).join('');
+
+  totalEl.textContent = 'NT$' + total;
+  submitBtn.disabled = false;
+}
+
+function adjustQty(idx, delta) {
+  cart[idx].quantity += delta;
+  if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+  renderCart();
+}
+
+document.getElementById('clearCart').addEventListener('click', () => { cart = []; renderCart(); });
+
+document.getElementById('submitOrder').addEventListener('click', async () => {
+  const tableNumber = document.getElementById('tableInput').value.trim();
+  const btn = document.getElementById('submitOrder');
+  btn.disabled = true; btn.textContent = '送出中...';
+
+  try {
+    const res = await fetch(API + '/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: cart.map(c => ({ item_id: c.item_id, item_name: c.item_name, base_price: c.base_price, size_name: c.size_name, size_adjust: c.size_adjust, quantity: c.quantity, toppings: c.toppings })), table_number: tableNumber })
+    });
+    if (!res.ok) throw new Error('Failed');
+    const order = await res.json();
+    showToast(`訂單建立成功！單號：${order.order_number}`, false);
+    cart = [];
+    document.getElementById('tableInput').value = '';
+    renderCart();
+  } catch (e) { showToast('送出失敗，請重試', true); }
+  btn.disabled = false; btn.textContent = '送出訂單';
+});
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>
