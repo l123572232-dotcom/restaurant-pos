@@ -11,6 +11,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 getDb();
 
 app.use('/api', require('./routes/menu'));
+app.use('/api', require('./routes/orders'));
+app.use('/api', require('./routes/reports'));
+app.use('/api', require('./routes/settings'));
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`POS Server running at http://localhost:${PORT}`);

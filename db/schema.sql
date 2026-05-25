@@ -33,31 +33,33 @@ CREATE TABLE IF NOT EXISTS item_toppings (
 
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  order_number INTEGER NOT NULL,
-  source TEXT NOT NULL DEFAULT 'counter',
+  order_number TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  total_price REAL NOT NULL,
+  table_number TEXT DEFAULT '',
   note TEXT DEFAULT '',
-  total_amount INTEGER NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'localtime')),
-  completed_at DATETIME
+  updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id INTEGER NOT NULL,
   item_id INTEGER NOT NULL,
-  size_id INTEGER,
+  item_name TEXT NOT NULL,
+  size_name TEXT DEFAULT '',
+  base_price REAL NOT NULL,
+  size_adjust REAL DEFAULT 0,
   quantity INTEGER NOT NULL DEFAULT 1,
-  unit_price INTEGER NOT NULL,
-  note TEXT DEFAULT '',
+  subtotal REAL NOT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS order_item_toppings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_item_id INTEGER NOT NULL,
-  topping_id INTEGER NOT NULL,
-  price INTEGER NOT NULL,
+  topping_name TEXT NOT NULL,
+  price_adjust REAL DEFAULT 0,
   FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE CASCADE
 );
 
